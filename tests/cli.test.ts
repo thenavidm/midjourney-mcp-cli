@@ -10,8 +10,10 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import {
+  EXIT,
   FLAG_ALIASES,
   SYNONYMS,
+  exitCodeFor,
   flagsFor,
   isCliCommand,
   parseArgs,
@@ -20,6 +22,16 @@ import {
 } from "../src/cli.js";
 import { ALL_TOOLS } from "../src/tools/index.js";
 import { needsConfirm } from "../src/safety.js";
+import {
+  ChallengeError,
+  JobTimeoutError,
+  NotFoundError,
+  NotSignedInError,
+  RateLimitError,
+  ServerError,
+  ValidationError,
+  WriteBlockedError,
+} from "../src/api/errors.js";
 
 describe("every tool is a command", () => {
   it("routes in both the dashed and underscored spellings", () => {
@@ -245,5 +257,28 @@ describe("which", () => {
     for (const target of new Set(Object.values(SYNONYMS).flat())) {
       expect(vocabulary.has(target), `synonym target '${target}' appears in no tool`).toBe(true);
     }
+  });
+});
+
+describe("exit codes follow the house contract", () => {
+  it("a typing mistake or a refused write is 2", () => {
+    expect(exitCodeFor(new ValidationError("bad --ar", 400, "/api/submit-jobs"))).toBe(EXIT.usage);
+    expect(exitCodeFor(new WriteBlockedError("imagine spends GPU time, so it will not run without --confirm."))).toBe(EXIT.usage);
+  });
+
+  it("a missing job is 3", () => {
+    expect(exitCodeFor(new NotFoundError("no such job", 404, "/api/job"))).toBe(EXIT.notFound);
+  });
+
+  it("signed out and a Cloudflare challenge are both 4, whatever the status", () => {
+    expect(exitCodeFor(new NotSignedInError("sign in", 401, "/api/user"))).toBe(EXIT.auth);
+    expect(exitCodeFor(new ChallengeError("challenge", 403, "/api/user"))).toBe(EXIT.auth);
+  });
+
+  it("rate limits are 7, and everything upstream is 5", () => {
+    expect(exitCodeFor(new RateLimitError("slow down", 429, "/api/jobs"))).toBe(EXIT.rateLimited);
+    expect(exitCodeFor(new ServerError("bad gateway", 502, "/api/jobs"))).toBe(EXIT.api);
+    expect(exitCodeFor(new JobTimeoutError("still running", "abc"))).toBe(EXIT.api);
+    expect(exitCodeFor(new Error("anything else"))).toBe(EXIT.api);
   });
 });

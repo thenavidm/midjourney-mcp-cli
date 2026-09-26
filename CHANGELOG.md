@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.0
+
+- Exit codes follow the house contract, so a script branches the same way on every one of these CLIs: 0 ok, 2 typed wrong or a refused write, 3 not found, 4 signed out or a Cloudflare check waiting, 5 Midjourney or the browser failed, 7 rate limited. Before, everything that was not a typing mistake exited 1.
+- The moodboard and default-model changes listed under 1.2.0 were committed after 1.2.0 went to npm, so they reach npm with this release.
+- The README named 5 of the tools that ask first. It now names all 10 that spend GPU time, and `remove_from_moodboard`.
+- Releases come from `publish.yml` on a tag, which publishes to npm and then creates the GitHub release. The Claude Desktop extension is attached to each release.
+
 ## 1.2.0
 
 - `moodboard` now applies a board the way the web app does, as a personalization code, rather than sampling its images into `--sref`. The code is the board id with an `m` prefix, which is neither documented nor guessable; the sref approximation only registered at a high `--sw`, and that weight was what made output look over-processed.

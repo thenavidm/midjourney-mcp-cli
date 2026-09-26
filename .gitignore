@@ -6,3 +6,4 @@ dist/
 .DS_Store
 desktop-extension/build/
 coverage/
+desktop-extension/*.mcpb

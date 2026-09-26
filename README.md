@@ -280,8 +280,11 @@ authorises a charge.
 | Code | Means |
 |---|---|
 | `0` | it worked |
-| `1` | it failed: signed out, a refused write, an API error |
-| `2` | it was typed wrong: a missing flag, a bad value, a bad `--ar` |
+| `2` | it was typed wrong, or a write was refused: a missing flag, a bad `--ar`, no `--confirm`, or read only |
+| `3` | the job, folder or asset is not there |
+| `4` | signed out, or a Cloudflare check is waiting in the browser window |
+| `5` | Midjourney or the browser failed |
+| `7` | rate limited, or out of fast hours |
 
 ## 5. Which surface, and what each costs
 
@@ -373,12 +376,14 @@ words to the command that does it, so you do not have to read this table.
 Reads work freely. What is guarded is spending.
 
 Every generation burns GPU time from a paid plan and there are no refunds, so
-`imagine`, `submit_imagine`, `rerun_job`, `vary_image` and `submit_raw_job` take
-`confirm: true`, or `--confirm` at the terminal.
+the 10 tools that spend it take `confirm: true`, or `--confirm` at the terminal:
+`imagine`, `submit_imagine`, `rerun_job`, `vary_image`, `upscale_image`,
+`animate_image`, `pan_image`, `zoom_out`, `remix_image` and `submit_raw_job`.
+`remove_from_moodboard` asks too.
 
-Nothing reversible asks. Adding to a moodboard does not, because
-`remove_from_moodboard` undoes it, and confirming reversible things is how a
-model learns to pass `confirm` by reflex, which defeats the gate on spending.
+Adding to a moodboard does not ask, and neither do downloads. Confirming
+harmless things is how a model learns to pass `confirm` by reflex, which
+defeats the gate on spending.
 
 A generation is not annotated destructive, because it destroys nothing. It has
 its own risk level, so a client deciding what to auto-approve is told the truth

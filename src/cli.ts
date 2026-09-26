@@ -523,6 +523,45 @@ export function whichCommand(query: string): { tool: AnyToolSpec; score: number 
     .slice(0, 5);
 }
 
+/* ---------------------------------------------------------------- exit codes */
+
+/**
+ * The house contract, so a script branches on the number the same way for
+ * every one of these CLIs: 0 ok, 2 usage or a refused write, 3 not found,
+ * 4 auth, 5 API, 7 rate limited, 10 nothing configured.
+ */
+export const EXIT = {
+  ok: 0, usage: 2, notFound: 3, auth: 4, api: 5, rateLimited: 7, config: 10,
+} as const;
+
+/**
+ * Midjourney has no error contract of its own, so api/errors.ts already sorts
+ * every failure into a class. The class decides, never the status: a
+ * Cloudflare challenge and a real permission failure are both a 403.
+ */
+export function exitCodeFor(error: unknown): number {
+  if (!(error instanceof MidjourneyError)) return EXIT.api;
+  switch (error.name) {
+    // A bad --ar or --sref is the caller typing it wrong, the same class of
+    // mistake as a missing flag. A refused write is the caller's to fix too:
+    // add --confirm, or turn read only off.
+    case "ValidationError":
+    case "WriteBlockedError":
+      return EXIT.usage;
+    case "NotFoundError":
+      return EXIT.notFound;
+    // Both need a person in the browser window: sign in, or let the
+    // Cloudflare check finish. The session is this server's credential.
+    case "NotSignedInError":
+    case "ChallengeError":
+      return EXIT.auth;
+    case "RateLimitError":
+      return EXIT.rateLimited;
+    default:
+      return EXIT.api;
+  }
+}
+
 /* ---------------------------------------------------------------- dispatch */
 
 /** The tools this process exposes, with READ_ONLY applied exactly as the server applies it. */
@@ -664,13 +703,7 @@ export async function runCli(argv: string[]): Promise<number> {
   } catch (error) {
     if (error instanceof UsageError) {
       emitError(error);
-      return 2;
-    }
-    // A bad --ar or --sref is the caller typing it wrong, the same class of
-    // mistake as a missing flag, so it exits 2 rather than 1.
-    if (error instanceof MidjourneyError && error.name === "ValidationError") {
-      emitError(error);
-      return 2;
+      return EXIT.usage;
     }
     if (error instanceof z.ZodError) {
       const first = error.issues[0];
@@ -681,10 +714,10 @@ export async function runCli(argv: string[]): Promise<number> {
             : error.message,
         ),
       );
-      return 2;
+      return EXIT.usage;
     }
     emitError(error);
-    return 1;
+    return exitCodeFor(error);
   } finally {
     client?.close();
   }
