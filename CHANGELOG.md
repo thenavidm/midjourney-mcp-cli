@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.1, 2026-10-04
+
+- **`npx -y @thenavidm/midjourney-mcp-cli` always starts the MCP server.** npx starts whichever binary the npm registry lists first when they share one file, and the registry does not keep the published order, so an MCP client set up with this README's install line could get `midjourney-cli` and its command list instead of a server. A third binary named after the package now always starts the server, and npx picks it by name.
+
 ## 1.3.0
 
 - Exit codes follow the house contract, so a script branches the same way on every one of these CLIs: 0 ok, 2 typed wrong or a refused write, 3 not found, 4 signed out or a Cloudflare check waiting, 5 Midjourney or the browser failed, 7 rate limited. Before, everything that was not a typing mistake exited 1.
