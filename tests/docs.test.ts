@@ -33,11 +33,12 @@ describe("environment variables", () => {
     }
   });
 
-  it("are all listed in --help", () => {
-    // The help groups the HTTP ones as `MIDJOURNEY_HTTP_PORT / _HOST / _TOKEN / _ALLOWED_ORIGINS`.
-    const grouped = new Set(["MIDJOURNEY_HTTP_HOST", "MIDJOURNEY_HTTP_TOKEN", "MIDJOURNEY_HTTP_ALLOWED_ORIGINS"]);
-    for (const name of READ.filter((name) => !grouped.has(name))) {
-      expect(help.includes(name), `${name} is missing from the --help text`).toBe(true);
+  // Since Slipway 0.1.15 the help names the settings that connect an account and the safety
+  // switches, and counts the rest, which agent-context describes one by one.
+  it("are all named in --help or described by agent-context", () => {
+    const described = new Set(context.settings.map((setting) => setting.env));
+    for (const name of ENV_VARS) {
+      expect(help.includes(name) || described.has(name), `${name} is in neither --help nor agent-context`).toBe(true);
     }
   });
 
