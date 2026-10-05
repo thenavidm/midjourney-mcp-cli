@@ -72,9 +72,9 @@ jobs:
           cache: npm
       - run: npm ci
       # The README sends Claude Desktop users to the release page for the .mcpb,
-      # so the release carries it.
+      # so the release carries it: this version's only, since 1.0.0's is in the repo.
       - run: npm run build:mcpb
       - name: Create the GitHub release
-        run: gh release create "$GITHUB_REF_NAME" desktop-extension/*.mcpb --title "$GITHUB_REF_NAME" --notes-file CHANGELOG.md
+        run: gh release create "$GITHUB_REF_NAME" "desktop-extension/midjourney-${GITHUB_REF_NAME#v}.mcpb" --title "$GITHUB_REF_NAME" --notes-file CHANGELOG.md
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
