@@ -13,23 +13,30 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { cli } from "@thenavidm/slipway/testing";
+import { app } from "../src/app.js";
 import { ENV_VARS } from "../src/config.js";
 import { ALL_TOOLS } from "../src/tools/index.js";
 
 const root = join(import.meta.dirname, "..");
 const readme = readFileSync(join(root, "README.md"), "utf8");
-const help = readFileSync(join(root, "src", "index.ts"), "utf8");
+// What `--help` prints, now that Slipway writes it, and every variable either side reads.
+const help = (await cli(app, ["--help"], { env: {} })).stdout;
+const context = JSON.parse((await cli(app, ["agent-context"], { env: {} })).stdout) as { settings: Array<{ env: string }> };
+const READ = [...new Set([...ENV_VARS, ...context.settings.map((setting) => setting.env)])];
 const skill = readFileSync(join(root, "SKILL.md"), "utf8");
 
 describe("environment variables", () => {
   it("are all documented in the README", () => {
-    for (const name of ENV_VARS) {
+    for (const name of READ) {
       expect(readme.includes(name), `${name} is missing from README.md`).toBe(true);
     }
   });
 
   it("are all listed in --help", () => {
-    for (const name of ENV_VARS) {
+    // The help groups the HTTP ones as `MIDJOURNEY_HTTP_PORT / _HOST / _TOKEN / _ALLOWED_ORIGINS`.
+    const grouped = new Set(["MIDJOURNEY_HTTP_HOST", "MIDJOURNEY_HTTP_TOKEN", "MIDJOURNEY_HTTP_ALLOWED_ORIGINS"]);
+    for (const name of READ.filter((name) => !grouped.has(name))) {
       expect(help.includes(name), `${name} is missing from the --help text`).toBe(true);
     }
   });
@@ -37,7 +44,7 @@ describe("environment variables", () => {
   it("has no variable in the help text that the code does not read", () => {
     const mentioned = help.match(/MIDJOURNEY_[A-Z_]+/g) ?? [];
     for (const name of new Set(mentioned)) {
-      expect(ENV_VARS as readonly string[], `--help mentions ${name}, which config.ts never reads`).toContain(
+      expect(READ, `--help mentions ${name}, which nothing reads`).toContain(
         name,
       );
     }
@@ -106,11 +113,11 @@ describe("version", () => {
   });
 
   it("is read from package.json rather than written into the source", () => {
-    const server = readFileSync(join(root, "src", "server.ts"), "utf8");
+    const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { version: string };
     // A hardcoded copy drifts on the next bump and the server then lies to
     // every client it handshakes with.
-    expect(server).not.toMatch(/VERSION = "\d/);
-    expect(server).toContain("pkg.version");
+    expect(readFileSync(join(root, "src", "app.ts"), "utf8")).not.toMatch(/VERSION = "\d/);
+    expect(app.version).toBe(pkg.version);
   });
 
   it("says the same tool count in the manifest as ships", () => {

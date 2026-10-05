@@ -1,6 +1,6 @@
 {
   "name": "@thenavidm/midjourney-mcp-cli",
-  "version": "1.3.1",
+  "version": "2.0.0",
   "description": "Midjourney MCP server and CLI for Claude Code and AI agents. 32 tools for generating images, following jobs to completion, downloading the real files, and building moodboards that make a style reusable.",
   "type": "module",
   "main": "./dist/index.js",
@@ -23,11 +23,12 @@
     "build:mcpb": "bash desktop-extension/build.sh"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.18.0",
-    "zod": "^3.23.8"
+    "@thenavidm/slipway": "^0.1.8",
+    "zod": "^4.2.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "ajv": "^8.20.0",
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"
   },
@@ -59,7 +60,8 @@
     "model-context-protocol",
     "text-to-image",
     "typescript",
-    "windsurf"
+    "windsurf",
+    "slipway"
   ],
   "files": [
     "dist",

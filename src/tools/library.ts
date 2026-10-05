@@ -200,7 +200,7 @@ export const libraryTools = [
     schema: {
       path: z.string().describe("Path starting with /api/, for example '/api/folders'."),
       query: z
-        .record(z.union([z.string(), z.number(), z.boolean()]))
+        .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
         .optional()
         .describe("Query parameters to append."),
     },

@@ -570,7 +570,7 @@ export const createTools = [
         .string()
         .describe("The value of the `t` field, for example 'imagine' or 'reroll'."),
       payload: z
-        .record(z.unknown())
+        .record(z.string(), z.unknown())
         .optional()
         .describe(
           "Extra top-level fields merged into the request body, for example { id: '<job-id>', index: 0 }. The mode, channel and metadata fields are filled in for you.",

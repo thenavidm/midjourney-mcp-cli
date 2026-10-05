@@ -4,13 +4,16 @@ Read `SKILL.md` for how to *use* the server. This file is about changing it.
 
 ## The one rule that shapes everything
 
-`src/tools/index.ts` exports one `ALL_TOOLS` array. `tools/kit.ts` turns a spec
-into an MCP tool, `cli.ts` turns the same spec into a shell command. Add a tool
-to that array and it exists on both surfaces, with flags, help, validation and
-the write guard already applied.
+`src/tools/index.ts` exports one `ALL_TOOLS` array. `tools/kit.ts` turns each
+spec into a Slipway tool, and [Slipway](https://github.com/thenavidm/slipway)
+serves it as an MCP tool and as a shell command from `src/app.ts`. Add a tool to
+that array and it exists on both surfaces, with flags, help, validation and the
+write guard already applied. A tool that spends GPU time is `risk: "spend"`,
+which Slipway confirms, and which `MIDJOURNEY_ALLOW_DESTRUCTIVE=0` refuses.
 
-Never add a command to `cli.ts` by hand. If a tool needs a nicer shell spelling,
-that is a `FLAG_ALIASES` entry, not a second code path.
+Never add a shell command by hand. If a tool needs a nicer shell spelling, that
+is a `FLAG_ALIASES` entry in `src/vocabulary.ts`, not a second code path; a word
+people type when looking for it is a `SYNONYMS` entry there.
 
 ## Where the risk lives
 

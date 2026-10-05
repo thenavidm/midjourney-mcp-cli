@@ -1,11 +1,12 @@
-<img src="https://cdn.navid.media/connectors/midjourney-icon-solid.png" alt="Midjourney" width="88">
+<img src="https://cdn.navid.me/connectors/midjourney-icon-solid.png" alt="Midjourney" width="88">
 
 # Midjourney MCP + CLI
 
 [![npm](https://img.shields.io/npm/v/@thenavidm/midjourney-mcp-cli?color=orange&label=npm)](https://www.npmjs.com/package/@thenavidm/midjourney-mcp-cli)
-[![Licence](https://img.shields.io/badge/licence-MIT-green)](./LICENSE)
+[![License](https://img.shields.io/badge/License-MIT-green)](./LICENSE)
 [![YouTube](https://img.shields.io/badge/YouTube-@thenavidm-red?logo=youtube&logoColor=white)](https://youtube.com/@thenavidm?sub_confirmation=1)
 [![X](https://img.shields.io/badge/X-@thenavidm-black?logo=x)](https://x.com/thenavidm)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-thenavidm-0A66C2?logo=linkedin&logoColor=white)](https://linkedin.com/in/thenavidm)
 
 Midjourney MCP server and CLI for Claude Code, Codex and AI agents. 32 tools for generating images, following jobs to completion, downloading the real files, and building moodboards that make a style reusable.
 
@@ -15,9 +16,9 @@ There is no key to paste and no cookie to export. You sign in once, in a window,
 
 32 tools, on both surfaces. It waits for jobs to finish and hands back the actual files, not a screenshot of them.
 
-Built and maintained by [Navid Moazzez](https://navid.me).
+Built and maintained by [Navid Moazzez](https://navid.me?utm_source=github&utm_medium=referral&utm_campaign=midjourney-mcp-cli&utm_content=readme). Built on [Slipway](https://github.com/thenavidm/slipway), which turns one definition of each tool into the MCP server and the CLI.
 
-<img src="https://cdn.navid.media/repos/midjourney-mcp-cli.gif?v=2" alt="Claude Code using the Midjourney MCP server" width="520">
+<img src="https://cdn.navid.me/repos/midjourney-mcp-cli.gif" alt="Claude Code using the Midjourney MCP server" width="520">
 
 ## Two ways to use it
 
@@ -44,7 +45,7 @@ only the fields you name, and errors are JSON on stderr whichever you pick.
 Handlers return data rather than pre-rendered text, so `--json` gives real
 fields on every command and `jq` works the same way everywhere.
 
-### MCP server, for AI agents
+### MCP server, for your AI app
 
 `midjourney-mcp` is what Claude Code, Claude Desktop, Cursor and the rest
 launch. You never run it by hand:
@@ -57,7 +58,7 @@ There is nothing to put in `-e`. Run `midjourney-cli login` first.
 
 Then just ask: _"shoot that campaign in the style of my High Fashion moodboard"._
 
-Every other client is in [section 3](#3-install).
+Every other client is in [section 3](#3-install). Each generation waits for your approval in the client, as [section 7](#7-spending-safely) explains.
 
 ### Which one
 
@@ -103,14 +104,14 @@ All 27 with their arguments are in [section 6](#6-tools).
 
 ## Contents
 
-| | Section | |
+| # | Section | What is in it |
 |---|---|---|
 | 1 | [What you can ask it](#1-what-you-can-ask-it) | Real prompts, not features |
 | 2 | [Sign in once](#2-sign-in-once) | No key, no cookie |
 | 3 | [Install](#3-install) | Every client, copy and paste, plus the shell |
 | 4 | [Output and exit codes](#4-output-and-exit-codes) | What scripts branch on |
 | 5 | [Which surface, and what each costs](#5-which-surface-and-what-each-costs) | Measured in Claude Code, and how to spend less |
-| 6 | [Tools](#6-tools) | All 27, by what they reach |
+| 6 | [Tools](#6-tools) | All 32, by what they reach |
 | 7 | [Spending safely](#7-spending-safely) | Why generating asks twice |
 | 8 | [Prompts and parameters](#8-prompts-and-parameters) | The grammar, validated before you pay |
 | 9 | [Moodboards](#9-moodboards) | Turning a look into something reusable |
@@ -163,6 +164,8 @@ To revoke it, sign out in that window, or delete the profile:
     rm -rf ~/.midjourney-mcp/chrome-profile
 
 ## 3. Install
+
+The long version, every step with what to do when one fails, is in [INSTALL.md](INSTALL.md).
 
 Node 22 or newer, and Google Chrome. Nothing else.
 
@@ -240,6 +243,8 @@ args = ["-y", "@thenavidm/midjourney-mcp-cli@latest"]
 Both binaries come from the same install. `midjourney-cli` with no arguments
 lists every command.
 
+`midjourney-cli install claude-code` (or `codex`, `claude-desktop`, `cursor`, `vscode`, `gemini`) adds the server to a client in its own format; add `--dry-run` to see the change first.
+
 ### Check it worked
 
     npx -y @thenavidm/midjourney-mcp-cli@latest doctor
@@ -250,11 +255,11 @@ different fixes.
 
 The two that actually happen:
 
-**`browser running: FAIL`.** Chrome is not up on the DevTools port. It starts on
+**`Browser running` fails.** Chrome is not up on the DevTools port. It starts on
 demand on the first tool call, so this is only a problem if you have set
 `MIDJOURNEY_CHROME_LAUNCH=0`. Run `login` to start it by hand.
 
-**`signed in: FAIL`.** The window is open but the profile is signed out. Run
+**`Signed in` fails.** The window is open but the profile is signed out. Run
 `login` again.
 
 ## 4. Output and exit codes
@@ -266,7 +271,7 @@ Results on stdout, errors on stderr as JSON, so one parse handles both.
 | none | pretty JSON |
 | `--json` | JSON, always |
 | `--compact` | the same JSON on one line |
-| `--select a,b.c` | keep only these fields. Dotted paths descend, arrays are traversed element-wise |
+| `--select a,b.c` | keep only these fields. Dotted paths descend, arrays are traversed element-wise, and a field not at the top selects inside the one list a result holds, keeping the rest |
 | `--agent` | compact JSON. Never implies `--confirm` |
 
 `--select` matters more here than it looks. One explore page is tens of
@@ -280,7 +285,8 @@ authorises a charge.
 | Code | Means |
 |---|---|
 | `0` | it worked |
-| `2` | it was typed wrong, or a write was refused: a missing flag, a bad `--ar`, no `--confirm`, or read only |
+| `1` | an unexpected error, worth an issue |
+| `2` | it was typed wrong, or a write was refused: a missing flag, an unknown command, a bad `--ar`, no `--confirm`, or read only |
 | `3` | the job, folder or asset is not there |
 | `4` | signed out, or a Cloudflare check is waiting in the browser window |
 | `5` | Midjourney or the browser failed |
@@ -291,12 +297,12 @@ authorises a charge.
 Both surfaces are the same program with the same 32 tools. The
 difference is when the model pays for them. Measured in Claude Code:
 
-| | MCP server | CLI |
+| Cost | MCP server | CLI |
 |---|---|---|
-| Every message, with every tool loaded | 15,200 tokens | nothing |
-| Every message, Claude Code's default | 1,000 tokens | nothing |
-| When Midjourney comes up | nothing more, or the tools it picks | 3,700 tokens for `SKILL.md`, once |
-| 20 messages with Midjourney in 1, every tool loaded | 305,000 tokens | 3,700 tokens |
+| Every message, with every tool loaded | 13,900 tokens | nothing |
+| Every message, Claude Code's default | 1,010 tokens | nothing |
+| When Midjourney comes up | nothing more, or the tools it picks | 3,840 tokens for `SKILL.md`, once |
+| 20 messages with Midjourney in 1, every tool loaded | 278,000 tokens | 3,840 tokens |
 
 Claude Code's [tool search](https://code.claude.com/docs/en/mcp#scale-with-mcp-tool-search)
 is on by default: it sends only the tool names and the server instructions,
@@ -309,11 +315,25 @@ To spend less, turn the server off when you are not using it, which in Claude
 Code is the `/mcp` panel. `MIDJOURNEY_READ_ONLY=1` takes the 15 write tools off the list, leaving 17.
 Or install the CLI and add the server on the days it earns its place.
 
-Measured on 2026-09-27 with Claude Code 2.1.257 on Claude Opus 5: one
+Measured on 2026-10-05 with Claude Code 2.1.286 on Claude Opus 5.5: one
 short prompt with and without the server connected, once with
 `ENABLE_TOOL_SEARCH=false` and once with the default, the difference read
 from the API's own usage figures. `SKILL.md` was measured the same way. Other
 apps and models count tokens a little differently.
+
+Against 1.3.1, measured the same day: every tool loaded costs 13,904 tokens
+instead of 15,243, tool search the same, and `SKILL.md` 140 more, because it now
+names all ten tools that spend where 1.3.1 named four, with the approval rule and
+the full exit codes. In Codex 0.159.3 on gpt-6.1-sol, the same task, "find the
+command that makes variations of one image from a finished job and the flags it
+requires", read a median of 84,264 input tokens on 2.0.0 against 85,194 on 1.3.1
+over the CLI, and 48,950 against 48,936 over MCP, five runs each. Codex reads
+MCP tools by printing them from a script and cuts that printout to the same
+length on both sides, so the 14 extra tokens are a different slice of the same
+list. By Codex's own count the full list is 701 tokens longer on 2.0.0, for one
+reason: the shorter approval note brings `imagine` under the size where Codex
+leaves out argument descriptions, so `imagine` now reaches Codex with all 31
+arguments explained, where 1.3.1 sent it with none.
 
 ## 6. Tools
 
@@ -387,23 +407,33 @@ words to the command that does it, so you do not have to read this table.
 Reads work freely. What is guarded is spending.
 
 Every generation burns GPU time from a paid plan and there are no refunds, so
-the 10 tools that spend it take `confirm: true`, or `--confirm` at the terminal:
+the 10 tools that spend it wait for your approval:
 `imagine`, `submit_imagine`, `rerun_job`, `vary_image`, `upscale_image`,
 `animate_image`, `pan_image`, `zoom_out`, `remix_image` and `submit_raw_job`.
 `remove_from_moodboard` asks too.
 
-Adding to a moodboard does not ask, and neither do downloads. Confirming
-harmless things is how a model learns to pass `confirm` by reflex, which
-defeats the gate on spending.
+In a terminal that is `--confirm`, which `--agent` never adds. Over MCP a person
+approves each call where the client can ask: Claude Code (2.1.246 and later)
+shows its own prompt, and a client that can show forms asks with an approval
+form whose one box starts unticked. Each approval is signed, bound to that exact
+call and works once. Where a client can do neither, the model's `confirm: true`
+counts, and it should pass it only when you asked for that image.
+`MIDJOURNEY_CONFIRM=model` makes `confirm: true` enough everywhere, for an agent
+with no person to ask.
 
-A generation is not annotated destructive, because it destroys nothing. It has
-its own risk level, so a client deciding what to auto-approve is told the truth
-about what it is approving.
+Adding to a moodboard does not ask, and neither do downloads. Approving
+harmless things is how people learn to click yes by reflex, which defeats the
+gate on spending.
+
+A generation is not annotated destructive, because it destroys nothing. It is a
+write that spends: it needs approval and `MIDJOURNEY_ALLOW_DESTRUCTIVE=0`
+refuses it, so a client deciding what to auto-approve is told the truth about
+what it is approving.
 
 ```
 MIDJOURNEY_READ_ONLY=1          removes every tool that is not a read, 17 remain
 MIDJOURNEY_ALLOW_DESTRUCTIVE=0  keeps reads and downloads, blocks anything that spends
-MIDJOURNEY_AUDIT_LOG=<path>     one JSON line per attempted change, allowed and blocked
+MIDJOURNEY_AUDIT_LOG=<path>     one JSON line per attempted change, allowed and blocked, and who approved it
 ```
 
 ## 8. Prompts and parameters
@@ -491,10 +521,11 @@ nothing is being faked.
 Chrome 136 stopped honouring `--remote-debugging-port` on the default profile, so
 this owns a profile instead: a dedicated `user-data-dir` you sign into once.
 
-Both surfaces are generated from one `ALL_TOOLS` array. `register()` turns a spec
-into an MCP tool and `cli.ts` turns the same spec into a shell command, through
-the same handler and the same write guard, so a tool added tomorrow is a command
-tomorrow and the two cannot drift. A test asserts that.
+Both surfaces come from one `ALL_TOOLS` array through
+[Slipway](https://github.com/thenavidm/slipway), which serves each tool as an
+MCP tool and as a shell command through the same handler and the same write
+guard, so a tool added tomorrow is a command tomorrow and the two cannot drift.
+A test asserts that.
 
 Downloads are read with an in-page `fetch`, which needs no new tab and no visible
 activity. The CDN sends `access-control-allow-origin: *`, so the bytes come back
@@ -542,6 +573,11 @@ Start with `doctor`. It orders the checks so the first failure is the one to fix
 | `had not finished after 600s` | Normal on relax mode. The job is still running; raise `MIDJOURNEY_JOB_TIMEOUT_MS` |
 | Every command times out at once | A native dialog was left open in the window. Dialogs are auto-dismissed now; if it persists, close the tab |
 | Downloads are empty or fail | The asset URL expired. Re-read the job with `get_job` for fresh URLs |
+| "will not run without --confirm" | Working as intended. See [section 7](#7-spending-safely) |
+| Claude Code asks before every generation | Expected: anything that spends waits for your approval |
+| `claude -p` will not generate | Headless Claude Code refuses tools that need a person. Give that agent `MIDJOURNEY_CONFIRM=model` |
+| No approval form appears | The client cannot show forms, so the model's `confirm: true` counts, and only for an image you asked for |
+| A piped request gets no answer | Stdin closed before the answer. The MCP stdio binding stops a server when its input ends; keep stdin open until you read the answer, or use the CLI |
 
 ## 14. Environment variables
 
@@ -557,7 +593,7 @@ Every one of these is optional. The defaults are what you want unless you are do
 | `MIDJOURNEY_ORIGIN` | `https://www.midjourney.com` | The site being driven |
 | `MIDJOURNEY_USER_ID` | discovered | Skip user-id discovery |
 | `MIDJOURNEY_DEFAULT_SPEED` | `fast` | `fast`, `relax` or `turbo` |
-| `MIDJOURNEY_DEFAULT_VERSION` | `7` | Model version appended as `--v` |
+| `MIDJOURNEY_DEFAULT_VERSION` | `8.2` | Model version appended as `--v` |
 | `MIDJOURNEY_DOWNLOAD_DIR` | `~/Downloads/midjourney` | Where downloads land |
 | `MIDJOURNEY_REQUEST_TIMEOUT_MS` | `30000` | Per-request deadline |
 | `MIDJOURNEY_MIN_REQUEST_INTERVAL_MS` | `700` | Floor between requests, jittered |
@@ -566,11 +602,16 @@ Every one of these is optional. The defaults are what you want unless you are do
 | `MIDJOURNEY_JOB_POLL_INTERVAL_MS` | `3000` | First poll interval, widening from there |
 | `MIDJOURNEY_REFRESH_VIEW` | `1` | Reload the open window after a generation so it shows the new work |
 | `MIDJOURNEY_READ_ONLY` | `0` | Hide everything that is not a read |
-| `MIDJOURNEY_ALLOW_DESTRUCTIVE` | `1` | `0` blocks anything that spends |
-| `MIDJOURNEY_AUDIT_LOG` | unset | Append-only log of every attempted change |
+| `MIDJOURNEY_ALLOW_DESTRUCTIVE` | `1` | `0` blocks anything that spends or cannot be undone |
+| `MIDJOURNEY_AUDIT_LOG` | unset | Append-only log of every attempted change, and who approved it |
+| `MIDJOURNEY_CONFIRM` | `human` | `model` lets `confirm: true` alone approve over MCP, for an agent with no person to ask |
+| `MIDJOURNEY_SURFACE` | `full` | `search` lists three tools that find, describe and run the rest |
+| `MIDJOURNEY_TOOL_TIMEOUT_MS` | unset | Give up on any tool after this long |
+| `MIDJOURNEY_DEBUG` | `0` | `1` prints debug lines on stderr |
 | `MIDJOURNEY_HTTP_PORT` | `8787` | Port for `--http` |
 | `MIDJOURNEY_HTTP_HOST` | `127.0.0.1` | Interface for `--http` |
-| `MIDJOURNEY_HTTP_TOKEN` | unset | Bearer token. Required to listen off loopback |
+| `MIDJOURNEY_HTTP_TOKEN` | unset | Bearer token. Any address but localhost refuses to start without one |
+| `MIDJOURNEY_HTTP_ALLOWED_ORIGINS` | unset | Comma-separated browser origins allowed to connect; a page from any other site is refused |
 
 ## 15. FAQ
 
@@ -633,7 +674,7 @@ Nothing leaves your machine except the requests to Midjourney that you asked for
 <details>
 <summary><b>Can it spend money without me noticing?</b></summary>
 
-It refuses to generate anything without an explicit confirmation on every call, and it records what it attempted when you set `MIDJOURNEY_AUDIT_LOG`. Set `MIDJOURNEY_READ_ONLY=1` and the generating tools disappear from the list entirely, which is the setting to use when pointing an unattended agent at the account.
+Every generation waits for your approval, in Claude Code's own prompt or a client's approval form, or for the model's `confirm: true` where a client can do neither, and it records what it attempted when you set `MIDJOURNEY_AUDIT_LOG`. Set `MIDJOURNEY_READ_ONLY=1` and the generating tools disappear from the list entirely, which is the setting to use when pointing an unattended agent at the account.
 
 </details>
 
@@ -676,7 +717,7 @@ Remove the entry from your client's config, then delete `~/.midjourney-mcp/chrom
 
 Run into a problem or have a question? [Open an issue](https://github.com/thenavidm/midjourney-mcp-cli/issues) and I will help.
 
-## About the author 👋
+## About the author
 
 Navid Moazzez is a leading AI business strategist, and the host of the AI Creator Summit, watched by 100,000+ creators. He helps creators and founders master AI and build their own AI Operating System (AI OS) to automate their business and life. He creates useful free tools, MCP servers and CLIs that creators and founders can use in their own workflows.
 
@@ -692,9 +733,10 @@ Navid Moazzez is a leading AI business strategist, and the host of the AI Creato
 
 ## Dependencies
 
-| Library | Licence | What it does |
+| Library | License | What it does |
 |---|---|---|
-| [@modelcontextprotocol/sdk](https://github.com/modelcontextprotocol/typescript-sdk) | MIT | The MCP protocol, stdio and HTTP transports |
+| [Slipway](https://github.com/thenavidm/slipway) | Apache-2.0 | The MCP server and the CLI from one definition of each tool, with the write guard |
+| [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk) | Apache-2.0 | The MCP protocol, stdio and HTTP transports, through Slipway |
 | [zod](https://github.com/colinhacks/zod) | MIT | One schema per tool, driving both surfaces |
 
 The browser connection uses Node's built-in `WebSocket` and needs nothing else.

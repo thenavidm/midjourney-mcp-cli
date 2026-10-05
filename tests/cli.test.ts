@@ -1,30 +1,21 @@
 /**
- * The seam between the two surfaces.
+ * The two surfaces, now that Slipway builds both from ALL_TOOLS.
  *
- * These assert parity rather than plumbing. The whole design rests on one
- * `ALL_TOOLS` array feeding both the MCP server and the shell, so what is worth
- * testing is that neither has drifted from it.
+ * Parsing, help and the exit-code contract are Slipway's and tested there,
+ * along with the `--select` cases this file used to hold. What matters here:
+ * every tool arrives on both surfaces intact, spending GPU time needs a yes and
+ * stops with MIDJOURNEY_ALLOW_DESTRUCTIVE=0, Midjourney's own flag spellings
+ * and search words still work, and its errors keep their exit codes.
  */
 
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
-
+import { EXIT, toSlipwayError } from "@thenavidm/slipway";
+import { checkApp, cli, connect } from "@thenavidm/slipway/testing";
 import {
-  EXIT,
-  FLAG_ALIASES,
-  SYNONYMS,
-  exitCodeFor,
-  flagsFor,
-  isCliCommand,
-  parseArgs,
-  selectFields,
-  whichCommand,
-} from "../src/cli.js";
-import { ALL_TOOLS } from "../src/tools/index.js";
-import { needsConfirm } from "../src/safety.js";
-import {
+  BrowserError,
   ChallengeError,
   JobTimeoutError,
+  MidjourneyError,
   NotFoundError,
   NotSignedInError,
   RateLimitError,
@@ -32,253 +23,119 @@ import {
   ValidationError,
   WriteBlockedError,
 } from "../src/api/errors.js";
+import { app } from "../src/app.js";
+import { ALL_TOOLS } from "../src/tools/index.js";
+import { toSlipway } from "../src/tools/kit.js";
+import { FLAG_ALIASES, SYNONYMS } from "../src/vocabulary.js";
 
-describe("every tool is a command", () => {
-  it("routes in both the dashed and underscored spellings", () => {
+const env = {};
+const first = async (...words: string[]) => (await cli(app, ["which", ...words], { env })).stdout.split("\n")[0] ?? "";
+
+describe("Midjourney on Slipway", () => {
+  it("offers every tool as a command and over MCP, under the same names", async () => {
+    const list = await cli(app, [], { env });
+    for (const tool of ALL_TOOLS) expect(list.stdout).toContain(tool.command);
+    const mcp = await connect(app, { env });
+    const names = (await mcp.listTools()).map((tool) => tool.name).sort();
+    await mcp.close();
+    expect(names).toEqual(ALL_TOOLS.map((tool) => tool.name).sort());
+  });
+
+  it("refuses to spend GPU time without --confirm, and says so, before the browser is touched", async () => {
+    const run = await cli(app, ["imagine", "a lighthouse at dusk"], { env });
+    expect(run.code).toBe(2);
+    expect(JSON.parse(run.stderr).error).toMatch(/^imagine spends GPU time off the Midjourney plan and cannot be refunded, so it will not run without --confirm/);
+  });
+
+  it("refuses spending with MIDJOURNEY_ALLOW_DESTRUCTIVE=0, even confirmed, and hides it in read-only mode", async () => {
+    const off = await cli(app, ["imagine", "a lighthouse", "--confirm"], { env: { MIDJOURNEY_ALLOW_DESTRUCTIVE: "0" } });
+    expect(off.code).toBe(2);
+    expect(JSON.parse(off.stderr).code).toBe("refused");
+    const mcp = await connect(app, { env: { MIDJOURNEY_READ_ONLY: "1" } });
+    const tools = await mcp.listTools();
+    await mcp.close();
+    expect(tools.length).toBeGreaterThan(0);
+    expect(tools.every((tool) => tool.annotations?.readOnlyHint === true)).toBe(true);
+  });
+
+  it("shows clients a paid generation as a write, not a destructive one", async () => {
+    const mcp = await connect(app, { env });
+    const imagine = (await mcp.listTools()).find((tool) => tool.name === "imagine")!;
+    await mcp.close();
+    expect(imagine.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: false });
+  });
+
+  it("asks for confirmation on what spends or destroys, and on nothing else", () => {
     for (const tool of ALL_TOOLS) {
-      expect(isCliCommand([tool.name.replace(/_/g, "-")]), tool.name).toBe(true);
-      expect(isCliCommand([tool.name]), tool.name).toBe(true);
+      const costly = tool.spends || tool.risk === "destructive";
+      expect(tool.requireConfirm, tool.name).toBe(costly);
+      if (costly) expect(tool.summary, `${tool.name} needs a summary for the audit log`).toBeTypeOf("function");
     }
   });
 
-  it("does not treat the server's own flags as commands", () => {
-    for (const flag of ["--http", "--version", "--help", "-v", "-h"]) {
-      expect(isCliCommand([flag]), flag).toBe(false);
-    }
-    expect(isCliCommand([])).toBe(false);
-  });
-
-  it("gives every schema key a flag", () => {
-    for (const tool of ALL_TOOLS) {
-      const keys = Object.keys(tool.schema);
-      const flags = flagsFor(tool.schema);
-      expect(flags.map((flag) => flag.key).sort(), tool.name).toEqual(keys.sort());
-      for (const flag of flags) {
-        expect(flag.flag, `${tool.name}.${flag.key}`).toBe(`--${flag.key.replace(/_/g, "-")}`);
-      }
-    }
-  });
-});
-
-describe("tool definitions", () => {
   it("describes every argument, because the description is the interface", () => {
     for (const tool of ALL_TOOLS) {
-      for (const flag of flagsFor(tool.schema)) {
-        expect(flag.help.length, `${tool.name}.${flag.key} has no description`).toBeGreaterThan(0);
+      const properties = (tool.jsonSchema.properties ?? {}) as Record<string, { description?: string }>;
+      for (const [key, property] of Object.entries(properties)) {
+        if (key === "confirm") continue;
+        expect(property.description?.length ?? 0, `${tool.name}.${key} has no description`).toBeGreaterThan(0);
       }
     }
   });
 
-  it("gives anything that spends or destroys a confirm argument and a summary", () => {
-    for (const tool of ALL_TOOLS) {
-      if (!needsConfirm(tool.risk)) continue;
-      expect(Object.keys(tool.schema), `${tool.name} needs a confirm argument`).toContain("confirm");
-      expect(tool.summary, `${tool.name} needs a summary for the audit log`).toBeTypeOf("function");
-    }
+  it("takes Midjourney's own spellings, --ar, --sref and --q, and shows them in help", async () => {
+    const run = await cli(app, ["imagine", "a lighthouse", "--ar", "16:9", "--sref", "1234", "--q", "2", "--dry-run", "--compact"], { env });
+    expect(run.code).toBe(0);
+    expect(JSON.parse(run.stdout).would_run).toMatchObject({ aspect: "16:9", style_refs: ["1234"], quality: 2 });
+    expect((await cli(app, ["imagine", "--help"], { env })).stdout).toContain("--aspect, --ar");
+    expect(Object.keys(FLAG_ALIASES).length).toBeGreaterThan(10);
   });
 
-  it("does not put a confirm on anything that neither spends nor destroys", () => {
-    for (const tool of ALL_TOOLS) {
-      if (needsConfirm(tool.risk)) continue;
-      expect(Object.keys(tool.schema), `${tool.name} should not ask for confirmation`).not.toContain(
-        "confirm",
-      );
-    }
+  it("finds a command from what someone would actually type", async () => {
+    expect(await first("make", "a", "picture")).toContain(" imagine ");
+    expect(await first("vary", "that", "image")).toContain(" vary-image ");
+    expect(await first("save", "my", "pictures", "to", "disk")).toContain(" download-job ");
+    expect(await first("what", "is", "rendering", "right", "now")).toContain(" get-queue ");
+    expect(await first("redo", "that", "one", "again")).toContain(" rerun-job ");
+    expect(await first("am", "i", "logged", "in")).toContain(" whoami ");
+    expect(await first("how", "much", "space", "am", "i", "using")).toContain(" get-storage ");
+    expect(await first("the", "a", "of", "and")).toContain("No command matches");
+    expect((await cli(app, ["which", "image", "job", "download", "generate"], { env })).stdout.trim().split("\n").length).toBeLessThanOrEqual(5);
+    expect(Object.keys(SYNONYMS).length).toBeGreaterThan(20);
   });
 
-  it("names every tool uniquely, in snake_case", () => {
-    const names = ALL_TOOLS.map((tool) => tool.name);
-    expect(new Set(names).size).toBe(names.length);
-    for (const name of names) expect(name, name).toMatch(/^[a-z][a-z0-9_]*$/);
-  });
-});
-
-describe("parseArgs", () => {
-  const flags = flagsFor({
-    prompt: z.string().describe("text"),
-    aspect: z.string().optional().describe("ratio"),
-    stylize: z.number().optional().describe("n"),
-    raw: z.boolean().optional().describe("switch"),
-    style_refs: z.array(z.string()).optional().describe("refs"),
-    speed: z.enum(["fast", "relax"]).optional().describe("speed"),
+  it("keeps login and capture reachable, capture's own --out included", async () => {
+    const help = (await cli(app, ["--help"], { env })).stdout;
+    expect(help).toContain("midjourney-cli login");
+    expect(help).toContain("midjourney-cli capture [--seconds N] [--out <file>] [--all]");
+    expect((await cli(app, ["login", "--help"], { env })).stdout).toContain("Usage: midjourney-cli login");
   });
 
-  it("accepts a bare argument for the first required flag", () => {
-    expect(parseArgs(["a red fox"], flags)).toEqual({ prompt: "a red fox" });
-  });
-
-  it("accepts both --flag value and --flag=value", () => {
-    expect(parseArgs(["--aspect", "16:9"], flags).aspect).toBe("16:9");
-    expect(parseArgs(["--aspect=16:9"], flags).aspect).toBe("16:9");
-  });
-
-  it("accepts the underscored spelling too", () => {
-    expect(parseArgs(["--style_refs", "1234"], flags).style_refs).toEqual(["1234"]);
-  });
-
-  it("collects a repeatable flag into an array", () => {
-    expect(parseArgs(["--style-refs", "1", "--style-refs", "2"], flags).style_refs).toEqual(["1", "2"]);
-  });
-
-  it("coerces numbers and refuses ones that are not", () => {
-    expect(parseArgs(["--stylize", "250"], flags).stylize).toBe(250);
-    expect(() => parseArgs(["--stylize", "high"], flags)).toThrow(/expects a number/);
-  });
-
-  it("treats a bare boolean as true and honours =false", () => {
-    expect(parseArgs(["--raw"], flags).raw).toBe(true);
-    expect(parseArgs(["--raw=false"], flags).raw).toBe(false);
-  });
-
-  it("checks enum values against the schema", () => {
-    expect(parseArgs(["--speed", "relax"], flags).speed).toBe("relax");
-    expect(() => parseArgs(["--speed", "sprint"], flags)).toThrow(/expects one of/);
-  });
-
-  it("refuses an unknown option instead of ignoring it", () => {
-    expect(() => parseArgs(["--nope", "1"], flags)).toThrow(/Unknown option/);
+  it("passes slipway check, aliases and synonyms included", async () => {
+    const report = await checkApp(app, { env });
+    expect(report.findings.filter((finding) => finding.level === "error")).toEqual([]);
+    expect(report.findings.filter((finding) => finding.check === "synonyms")).toEqual([]);
   });
 });
 
-describe("repeatable flags keep their element type", () => {
-  const flags = flagsFor({
-    indexes: z.array(z.number().int().min(0)).optional().describe("which"),
-    names: z.array(z.string()).optional().describe("who"),
+describe("Midjourney's errors keep their exit codes", () => {
+  const at = "/api/submit-jobs";
+  it.each([
+    ["a bad --ar", new ValidationError("bad --ar", 400, at), EXIT.usage],
+    ["a refused write", new WriteBlockedError("imagine will not run without --confirm."), EXIT.usage],
+    ["a missing job", new NotFoundError("no such job", 404, "/api/job"), EXIT.notFound],
+    ["a signed-out session", new NotSignedInError("not signed in", 403, at), EXIT.auth],
+    ["a Cloudflare challenge", new ChallengeError("challenge", 403, at), EXIT.auth],
+    ["a rate limit", new RateLimitError("slow down", 429, at), EXIT.rateLimited],
+    ["a server failure", new ServerError("boom", 502, at), EXIT.api],
+    ["a job that never finished", new JobTimeoutError("still running after 600 s", "job-1"), EXIT.api],
+    ["no browser", new BrowserError("Chrome is not running"), EXIT.api],
+    ["anything else Midjourney says", new MidjourneyError("odd", 418, at), EXIT.api],
+  ])("maps %s", (_label, error, code) => {
+    expect(toSlipwayError(toSlipway(error)).exitCode).toBe(code);
   });
 
-  /**
-   * `--indexes 0` used to reach Zod as the string "0" and fail with "expected
-   * number, received string", which reads as the caller's mistake when it was
-   * the parser flattening every array element to a string.
-   */
-  it("coerces a repeatable number flag to numbers", () => {
-    expect(parseArgs(["--indexes", "0", "--indexes", "2"], flags).indexes).toEqual([0, 2]);
-  });
-
-  it("still leaves a repeatable string flag alone", () => {
-    expect(parseArgs(["--names", "a"], flags).names).toEqual(["a"]);
-  });
-
-  it("parses cleanly through the schema, not just the parser", () => {
-    const schema = z.object({ indexes: z.array(z.number().int().min(0)).optional() });
-    expect(() => schema.parse(parseArgs(["--indexes", "0"], flags))).not.toThrow();
-  });
-});
-
-describe("Midjourney's own flag spellings", () => {
-  const flags = flagsFor({
-    prompt: z.string().describe("text"),
-    aspect: z.string().optional().describe("ratio"),
-    style_refs: z.array(z.string()).optional().describe("refs"),
-    quality: z.number().optional().describe("q"),
-  });
-
-  it("accepts --ar, --sref and --q", () => {
-    expect(parseArgs(["x", "--ar", "16:9"], flags).aspect).toBe("16:9");
-    expect(parseArgs(["x", "--sref", "1234"], flags).style_refs).toEqual(["1234"]);
-    expect(parseArgs(["x", "--q", "2"], flags).quality).toBe(2);
-  });
-
-  it("only aliases onto keys some tool actually declares", () => {
-    const known = new Set(ALL_TOOLS.flatMap((tool) => Object.keys(tool.schema)));
-    for (const [alias, key] of Object.entries(FLAG_ALIASES)) {
-      expect(known.has(key), `--${alias} points at '${key}', which no tool declares`).toBe(true);
-    }
-  });
-});
-
-describe("selectFields", () => {
-  it("keeps only the named fields", () => {
-    expect(selectFields({ a: 1, b: 2, c: 3 }, ["a", "c"])).toEqual({ a: 1, c: 3 });
-  });
-
-  it("descends dotted paths", () => {
-    expect(selectFields({ job: { id: "x", noise: 1 } }, ["job.id"])).toEqual({ "job.id": "x" });
-  });
-
-  it("selects into the results array, keeping the envelope", () => {
-    const data = { count: 2, jobs: [{ id: "a", noise: 1 }, { id: "b", noise: 2 }] };
-    expect(selectFields(data, ["id"])).toEqual({ count: 2, jobs: [{ id: "a" }, { id: "b" }] });
-  });
-
-  /**
-   * A single job carries `images`, an array of URL strings. Treating that as
-   * the result set meant the envelope was kept and nothing was actually
-   * filtered, so `--select id,status` returned the entire job.
-   */
-  it("does not mistake an array of strings for a result set", () => {
-    const job = { id: "a", status: "completed", prompt: "x", images: ["u1", "u2"] };
-    expect(selectFields(job, ["id", "status"])).toEqual({ id: "a", status: "completed" });
-  });
-
-  it("still selects into an array of objects", () => {
-    const data = { count: 1, jobs: [{ id: "a", noise: 1 }], images: ["u1"] };
-    expect(selectFields(data, ["id"])).toEqual({ count: 1, jobs: [{ id: "a" }], images: ["u1"] });
-  });
-
-  it("is a no-op with no paths", () => {
-    const data = { a: 1 };
-    expect(selectFields(data, [])).toBe(data);
-  });
-});
-
-describe("which", () => {
-  const top = (query: string): string | undefined => whichCommand(query)[0]?.tool.name;
-
-  it("resolves what someone would actually type", () => {
-    expect(top("make a picture")).toBe("imagine");
-    expect(top("vary that image")).toBe("vary_image");
-    expect(top("save my pictures to disk")).toBe("download_job");
-    expect(top("what is rendering right now")).toBe("get_queue");
-    expect(top("redo that one again")).toBe("rerun_job");
-    expect(top("am i logged in")).toBe("whoami");
-    expect(top("how much space am i using")).toBe("get_storage");
-  });
-
-  it("returns nothing rather than a bad guess", () => {
-    expect(whichCommand("")).toEqual([]);
-    expect(whichCommand("the a of and")).toEqual([]);
-  });
-
-  it("never suggests more than a screenful", () => {
-    expect(whichCommand("image job download generate").length).toBeLessThanOrEqual(5);
-  });
-
-  /**
-   * Every synonym has to point at vocabulary some tool actually uses, or it is
-   * a redirect to nowhere that silently stops matching.
-   */
-  it("maps synonyms onto words the tools really contain", () => {
-    const vocabulary = new Set(
-      ALL_TOOLS.flatMap((tool) =>
-        `${tool.name} ${tool.title} ${tool.description}`.toLowerCase().split(/[^a-z0-9]+/),
-      ),
-    );
-    for (const target of new Set(Object.values(SYNONYMS).flat())) {
-      expect(vocabulary.has(target), `synonym target '${target}' appears in no tool`).toBe(true);
-    }
-  });
-});
-
-describe("exit codes follow the house contract", () => {
-  it("a typing mistake or a refused write is 2", () => {
-    expect(exitCodeFor(new ValidationError("bad --ar", 400, "/api/submit-jobs"))).toBe(EXIT.usage);
-    expect(exitCodeFor(new WriteBlockedError("imagine spends GPU time, so it will not run without --confirm."))).toBe(EXIT.usage);
-  });
-
-  it("a missing job is 3", () => {
-    expect(exitCodeFor(new NotFoundError("no such job", 404, "/api/job"))).toBe(EXIT.notFound);
-  });
-
-  it("signed out and a Cloudflare challenge are both 4, whatever the status", () => {
-    expect(exitCodeFor(new NotSignedInError("sign in", 401, "/api/user"))).toBe(EXIT.auth);
-    expect(exitCodeFor(new ChallengeError("challenge", 403, "/api/user"))).toBe(EXIT.auth);
-  });
-
-  it("rate limits are 7, and everything upstream is 5", () => {
-    expect(exitCodeFor(new RateLimitError("slow down", 429, "/api/jobs"))).toBe(EXIT.rateLimited);
-    expect(exitCodeFor(new ServerError("bad gateway", 502, "/api/jobs"))).toBe(EXIT.api);
-    expect(exitCodeFor(new JobTimeoutError("still running", "abc"))).toBe(EXIT.api);
-    expect(exitCodeFor(new Error("anything else"))).toBe(EXIT.api);
+  it("keeps the job id of a job that timed out", () => {
+    expect(toSlipway(new JobTimeoutError("still running", "job-1")).toJSON()).toMatchObject({ code: "timeout", details: { job_id: "job-1" } });
   });
 });

@@ -23,14 +23,20 @@ that can reach that port can drive the browser, and therefore the account.
 
 `--http` refuses to listen on anything but loopback without
 `MIDJOURNEY_HTTP_TOKEN`, because the server acts as a signed-in account and can
-spend money from a paid plan.
+spend money from a paid plan. It also refuses a request from a page on another
+site unless `MIDJOURNEY_HTTP_ALLOWED_ORIGINS` lists that site, because a browser
+can send one to a server on localhost.
 
 ## Limiting what an agent can do
 
-`MIDJOURNEY_READ_ONLY=1` removes every tool that is not a read, so a model
-cannot call one it cannot see. `MIDJOURNEY_ALLOW_DESTRUCTIVE=0` keeps reads and
-downloads while blocking anything that spends. `MIDJOURNEY_AUDIT_LOG=<path>`
-records every attempted change, allowed and blocked alike.
+Anything that spends GPU time waits for approval: over MCP a person approves
+each call where the client can ask, in Claude Code's own prompt or an approval
+form; elsewhere the model must pass `confirm: true`, and `MIDJOURNEY_CONFIRM=model`
+allows that everywhere. `MIDJOURNEY_READ_ONLY=1` removes every tool that is not a
+read, so a model cannot call one it cannot see. `MIDJOURNEY_ALLOW_DESTRUCTIVE=0`
+keeps reads and downloads while blocking anything that spends.
+`MIDJOURNEY_AUDIT_LOG=<path>` records every attempted change, allowed and blocked
+alike, with who approved it.
 
 ## Supported versions
 
